@@ -82,7 +82,7 @@
             </span>
           </h1>
           <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.4 · Bot --</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.5 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -448,6 +448,18 @@
         : `<span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-rose-950/80 text-rose-400 border border-rose-500/30 tracking-wider uppercase">📉 SHORT (VENTA)</span>`;
     }
 
+    // Apalancamiento sugerido (lo calcula el bot; si una señal antigua no lo trae, se calcula igual aquí)
+    const APALANCAMIENTO_MAX = 20;
+    function apalancamiento(s) {
+      if (Number(s.apalancamiento) > 0) return Number(s.apalancamiento);
+      const dist = Math.abs(s.entrada - s.sl) / s.entrada;
+      if (!(dist > 0)) return 1;
+      return Math.max(1, Math.min(APALANCAMIENTO_MAX, Math.floor(0.10 / dist)));
+    }
+    function chipApalancamiento(s) {
+      return `<span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-sky-950/80 text-sky-300 border border-sky-500/30 font-mono whitespace-nowrap" title="Apalancamiento sugerido">⚡ ${apalancamiento(s)}x</span>`;
+    }
+
     function chipTendencia(t) {
       if (t === 'ALCISTA') return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-emerald-500/15 text-emerald-400 border border-emerald-500/30">▲ ALCISTA</span>`;
       if (t === 'BAJISTA') return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-rose-500/15 text-rose-400 border border-rose-500/30">▼ BAJISTA</span>`;
@@ -530,7 +542,10 @@
       const horas = t.length - 1;
       return `
         <div onclick="event.stopPropagation(); abrirVelas('${s.id}')" class="cursor-pointer active:scale-[0.99] transition">
-          <div class="h-16 w-full bg-slate-900/80 rounded-lg p-1 border border-slate-800/80 hover:border-slate-600">
+          <div class="relative h-16 w-full bg-slate-900/80 rounded-lg p-1 border border-brand-highlight/30 hover:border-brand-highlight/60">
+            <span class="absolute top-1 right-1 z-10 inline-flex items-center gap-1 px-1.5 py-0.5 rounded-md text-[8px] font-extrabold bg-brand-highlight/15 text-brand-highlight border border-brand-highlight/40 animate-pulse">🕯️ VER VELAS
+              <svg class="w-2.5 h-2.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2.5" d="M4 8V4h4M20 8V4h-4M4 16v4h4M20 16v4h-4"></path></svg>
+            </span>
             <svg class="w-full h-full overflow-visible" viewBox="0 0 100 40" preserveAspectRatio="none">
               ${linea(s.tp, '#34d399', '4 3')}
               ${linea(s.entrada, '#94a3b8', '2 3')}
@@ -543,7 +558,7 @@
             <span class="flex items-center gap-2"><span class="text-emerald-400">- - TP</span><span class="text-slate-400">· · Entrada</span><span class="text-rose-400">- - SL</span></span>
             <span>${s.estado === 'CERRADA' ? 'Cierre' : 'Ahora'} (${horas} h)</span>
           </div>
-          <div class="text-center text-[8px] text-brand-highlight mt-0.5">🔍 Toca para ver el gráfico de velas</div>
+          <div class="text-center text-[9px] font-bold text-brand-highlight mt-0.5">👆 Toca el gráfico para abrir las velas</div>
         </div>`;
     }
 
@@ -615,7 +630,7 @@
           ${avatar(s, true)}
           <div class="min-w-0">
             <h2 class="text-sm font-extrabold text-white truncate">${s.nombre} (${s.simbolo})</h2>
-            <p class="text-[10px] text-slate-400">Velas de 1 h · ${s.direccion === 'LONG' ? '📈 LONG (compra)' : '📉 SHORT (venta)'}</p>
+            <p class="text-[10px] text-slate-400">Velas de 1 h · ${s.direccion === 'LONG' ? '📈 LONG (compra)' : '📉 SHORT (venta)'} · ⚡ ${apalancamiento(s)}x</p>
           </div>
         </div>`;
       const datos = (et, val, cls) => `<div class="py-1.5 rounded-lg bg-slate-900/60 border border-slate-800"><span class="text-[8px] text-slate-500 uppercase font-bold block">${et}</span><span class="text-[11px] font-extrabold font-mono ${cls}">${val}</span></div>`;
@@ -782,7 +797,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.4';
+    const VERSION_WEB = '1.5';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
@@ -1098,8 +1113,8 @@
           </div>
 
           <div class="p-3 rounded-xl bg-slate-900/90 border border-slate-800/90 space-y-2">
-            <div class="flex items-center justify-between">
-              ${badgeDireccion(s)}
+            <div class="flex items-center justify-between gap-2">
+              <span class="flex items-center gap-1.5 flex-wrap">${badgeDireccion(s)}${chipApalancamiento(s)}</span>
               <span class="text-xs font-extrabold text-amber-400 font-mono bg-amber-400/10 px-2 py-0.5 rounded border border-amber-400/20">${s.ventaja !== null && s.ventaja !== undefined ? (ventaja >= 0 ? '+' : '') + ventaja + '%' : '—'}</span>
             </div>
             <div class="text-xs font-bold text-slate-200">
@@ -1110,6 +1125,7 @@
               <div class="py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25"><span class="text-[8px] text-emerald-400/80 uppercase font-bold block">Take Profit</span><span class="text-[11px] font-extrabold text-emerald-400 font-mono">${fmtPrecio(s.tp)}</span><span class="text-[8px] text-emerald-400/70 font-mono block">${pctTP >= 0 ? '+' : ''}${pctTP.toFixed(2)}%</span></div>
               <div class="py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25"><span class="text-[8px] text-rose-400/80 uppercase font-bold block">Stop Loss</span><span class="text-[11px] font-extrabold text-rose-400 font-mono">${fmtPrecio(s.sl)}</span><span class="text-[8px] text-rose-400/70 font-mono block">${pctSL >= 0 ? '+' : ''}${pctSL.toFixed(2)}%</span></div>
             </div>
+            <div class="text-[10px] text-sky-300/90">⚡ Apalancamiento sugerido ${apalancamiento(s)}x (máx. ${APALANCAMIENTO_MAX}x): tocar el stop supone ≈ ${(Math.abs(pctSL) * apalancamiento(s)).toFixed(1)}% del margen.</div>
             ${graficoTrade(s)}
             <div>
               <div class="flex items-center justify-between text-[10px] mb-1">
@@ -1192,6 +1208,7 @@
               <div class="flex items-center gap-3">
                 <span>Ventaja: <strong class="text-emerald-400">${ventaja}</strong></span>
                 <span>Stake: <strong class="text-brand-highlight">${s.stake}/10</strong></span>
+                <span>Apal.: <strong class="text-sky-300">${apalancamiento(s)}x</strong></span>
               </div>
               ${cerrada ? `<span class="text-[10px] text-slate-500 uppercase font-bold tracking-wider">CERRADA ${s.fecha_hora_cierre_display || ''}</span>` : `<span class="text-[10px] text-emerald-400/80 font-bold">ACTIVA</span>`}
             </div>
