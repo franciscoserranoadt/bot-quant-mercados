@@ -81,7 +81,8 @@
               <span id="badgeTxt">24/7 ONLINE</span>
             </span>
           </h1>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.0 · Bot --</p>
+          <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.1 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -107,7 +108,7 @@
     </div>
 
     <!-- BANNER CANAL TELEGRAM INTERACTIVO -->
-    <a href="https://t.me/apex_quant_senales" target="_blank" rel="noopener noreferrer" class="block p-3.5 rounded-2xl bg-gradient-to-r from-[#0088cc]/15 via-slate-900 to-slate-900 border border-[#0088cc]/40 hover:border-[#0088cc] transition group shadow-lg shadow-[#0088cc]/5 active:scale-[0.99]">
+    <a href="https://t.me/apexquant_bot_mercados" target="_blank" rel="noopener noreferrer" class="block p-3.5 rounded-2xl bg-gradient-to-r from-[#0088cc]/15 via-slate-900 to-slate-900 border border-[#0088cc]/40 hover:border-[#0088cc] transition group shadow-lg shadow-[#0088cc]/5 active:scale-[0.99]">
       <div class="flex items-center justify-between">
         <div class="flex items-center gap-3">
           <div class="w-10 h-10 rounded-xl bg-[#0088cc]/20 border border-[#0088cc]/40 flex items-center justify-center text-[#0088cc] group-hover:scale-105 transition">
@@ -120,7 +121,7 @@
               <span class="text-xs font-bold text-white tracking-wide">Canal Telegram Oficial</span>
               <span class="w-1.5 h-1.5 rounded-full bg-brand-primary animate-ping"></span>
             </div>
-            <p class="text-[11px] text-slate-400 font-mono">Señales automáticas en <span class="text-[#0088cc] font-semibold">@apex_quant_senales</span></p>
+            <p class="text-[11px] text-slate-400 font-mono">Señales automáticas en <span class="text-[#0088cc] font-semibold">@apexquant_bot_mercados</span></p>
           </div>
         </div>
         <div class="flex items-center gap-1 px-2.5 py-1 rounded-lg bg-[#0088cc]/20 border border-[#0088cc]/30 text-[#0088cc] text-[10px] font-bold group-hover:bg-[#0088cc] group-hover:text-white transition">
@@ -174,7 +175,7 @@
           <span id="balanceNetoTG" class="text-xs font-extrabold text-brand-primary font-mono">+0.00 U.</span>
         </div>
       </div>
-      <div class="mt-1.5 px-2 py-1 rounded-lg bg-slate-900/60 border border-slate-800 text-[9px] text-slate-300 leading-snug">Métricas calculadas <strong>exclusivamente</strong> sobre las señales oficiales emitidas al <a href="https://t.me/apex_quant_senales" target="_blank" class="text-brand-highlight underline">canal de Telegram</a>.</div>
+      <div class="mt-1.5 px-2 py-1 rounded-lg bg-slate-900/60 border border-slate-800 text-[9px] text-slate-300 leading-snug">Métricas calculadas <strong>exclusivamente</strong> sobre las señales oficiales emitidas al <a href="https://t.me/apexquant_bot_mercados" target="_blank" class="text-brand-highlight underline">canal de Telegram</a>.</div>
       <div class="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-center">
         <div><span class="text-[8px] text-slate-400 uppercase font-bold block">Yield / ROI</span><span id="yieldRoiTG" class="text-[11px] font-bold text-brand-primary font-mono">+0.0%</span></div>
         <div><span class="text-[8px] text-slate-400 uppercase font-bold block">Unidades Ganadas</span><span id="unidadesGanadasTG" class="text-[11px] font-bold text-emerald-400 font-mono">+0.00 U.</span></div>
@@ -440,9 +441,50 @@
       return `<span class="px-1.5 py-0.5 rounded-md text-[9px] font-bold bg-amber-500/15 text-amber-400 border border-amber-500/30">◆ LATERAL</span>`;
     }
 
+    // =========================================================================
+    // LOGOS DE CADA ACTIVO (como los escudos de los equipos)
+    // Si un logo no carga se prueba el siguiente; si fallan todos, se muestran las siglas.
+    // =========================================================================
+    const LOGO_ESPECIAL = { 'GC=F': '🥇', 'CL=F': '🛢️', 'BZ=F': '🛢️', '^GSPC': '🇺🇸' };
+
+    function logoUrls(a) {
+      const s = (a.simbolo || '').toLowerCase();
+      if (a.categoria === 'cripto') {
+        return [`https://assets.coincap.io/assets/icons/${s}@2x.png`,
+                `https://cdn.jsdelivr.net/gh/spothq/cryptocurrency-icons@master/128/color/${s}.png`];
+      }
+      if (a.categoria === 'acciones') {
+        const t = a.ticker || '';
+        return [`https://financialmodelingprep.com/image-stock/${t}.png`,
+                `https://assets.parqet.com/logos/symbol/${t.replace('-', '.')}?format=png`];
+      }
+      return [];
+    }
+
+    function logoFallo(img) {
+      const resto = (img.dataset.alt || '').split('|').filter(Boolean);
+      if (resto.length) {
+        img.dataset.alt = resto.slice(1).join('|');
+        img.src = resto[0];
+        return;
+      }
+      const sp = document.createElement('span');
+      sp.className = img.dataset.cls;
+      sp.textContent = img.dataset.txt;
+      img.replaceWith(sp);
+    }
+
     function avatar(a, grande) {
       const tam = grande ? 'w-6 h-6 text-[7.5px]' : 'w-5 h-5 text-[7px]';
-      return `<span class="inline-flex items-center justify-center ${tam} rounded-full bg-slate-800 border border-slate-700 font-extrabold text-brand-highlight flex-shrink-0">${(a.simbolo || '').slice(0, 4)}</span>`;
+      const clsTexto = `inline-flex items-center justify-center ${tam} rounded-full bg-slate-800 border border-slate-700 font-extrabold text-brand-highlight flex-shrink-0`;
+      const siglas = (a.simbolo || '').slice(0, 4);
+      const especial = LOGO_ESPECIAL[a.ticker];
+      if (especial) {
+        return `<span class="inline-flex items-center justify-center ${grande ? 'w-6 h-6 text-[14px]' : 'w-5 h-5 text-[12px]'} rounded-full bg-slate-800 border border-slate-700 flex-shrink-0">${especial}</span>`;
+      }
+      const urls = logoUrls(a);
+      if (!urls.length) return `<span class="${clsTexto}">${siglas}</span>`;
+      return `<img src="${urls[0]}" data-alt="${urls.slice(1).join('|')}" data-cls="${clsTexto}" data-txt="${siglas}" onerror="logoFallo(this)" loading="lazy" alt="" class="${grande ? 'w-6 h-6' : 'w-5 h-5'} rounded-full bg-white object-contain p-[2px] flex-shrink-0">`;
     }
 
     function contextoActivo(a) {
@@ -588,7 +630,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.0';
+    const VERSION_WEB = '1.1';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
@@ -987,7 +1029,7 @@
               <div class="flex-shrink-0">${badge}</div>
             </div>
             <div class="text-sm font-extrabold text-white flex items-center gap-2 flex-wrap">
-              <span>${s.cat_icono || ''} ${s.nombre} (${s.simbolo}) — <span class="${s.direccion === 'LONG' ? 'text-brand-primary' : 'text-rose-400'}">${s.direccion === 'LONG' ? 'LONG (compra)' : 'SHORT (venta)'}</span></span>
+              ${avatar(s, false)}<span>${s.nombre} (${s.simbolo}) — <span class="${s.direccion === 'LONG' ? 'text-brand-primary' : 'text-rose-400'}">${s.direccion === 'LONG' ? 'LONG (compra)' : 'SHORT (venta)'}</span></span>
             </div>
             <div class="text-[11px] font-mono text-slate-400">
               Entrada <strong class="text-white">${fmtPrecio(s.entrada)}</strong> · TP <strong class="text-emerald-400">${fmtPrecio(s.tp)}</strong> · SL <strong class="text-rose-400">${fmtPrecio(s.sl)}</strong>${cerrada ? ` · Cierre <strong class="text-white">${fmtPrecio(s.precio_cierre)}</strong>` : ''}
