@@ -14,7 +14,7 @@ try:
 except Exception:   # sin la librería no hay datos, pero el bot no se rompe
     yf = None
 
-VERSION = "1.0"
+VERSION = "1.1"
 
 # ==============================================================================
 # CONFIGURACIÓN DE TELEGRAM Y WEB
@@ -353,7 +353,7 @@ def crear_senal(tk, info, direccion, ts_barra, precio, atr, fila, stats, ahora_u
         "timestamp_ms": int(ahora_utc.timestamp() * 1000),
         "barra_senal_utc": ts_barra.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "semana_id": semana_id, "estado": "ABIERTA", "acertado": None, "resultado_r": None,
-        "precio_actual": num(precio, 6), "r_actual": 0.0, "max_r": 0.0,
+        "precio_actual": num(precio, 6), "r_actual": 0.0, "max_r": 0.0, "traza": [num(precio, 6)],
         "precio_cierre": None, "motivo_cierre": None, "fecha_cierre": None, "hora_cierre": None,
         "fecha_hora_cierre_display": None, "semana_cierre": None, "ts_cierre_utc": None,
         "stake": stake, "ventaja": v, "prob": round(p * 100, 1) if p is not None else None, "n_bt": n_bt,
@@ -412,22 +412,33 @@ def seguir_senal(s, df, ahora_utc, semana_id):
     e, sl, tp = s["entrada"], s["sl"], s["tp"]
     riesgo = abs(e - sl) or 1e-12
     posteriores = df[df.index >= ent]
+    traza = [e]   # recorrido del precio durante la operación (cierre de cada vela de 1 h) para el gráfico de la web
+
+    def fin(r, motivo, precio_fin, ts):
+        traza.append(precio_fin)
+        s["traza"] = [num(v, 6) for v in traza[-(MAX_BARRAS + 2):]]
+        return cerrar_senal(s, r, motivo, precio_fin, ts, semana_id)
+
     for ts, row in posteriores.iterrows():
         if larga:
             if row["Low"] <= sl:
-                return cerrar_senal(s, -1.0, "SL", sl, ts.to_pydatetime(), semana_id)
+                return fin(-1.0, "SL", sl, ts.to_pydatetime())
             if row["High"] >= tp:
-                return cerrar_senal(s, RR, "TP", tp, ts.to_pydatetime(), semana_id)
+                return fin(RR, "TP", tp, ts.to_pydatetime())
         else:
             if row["High"] >= sl:
-                return cerrar_senal(s, -1.0, "SL", sl, ts.to_pydatetime(), semana_id)
+                return fin(-1.0, "SL", sl, ts.to_pydatetime())
             if row["Low"] <= tp:
-                return cerrar_senal(s, RR, "TP", tp, ts.to_pydatetime(), semana_id)
+                return fin(RR, "TP", tp, ts.to_pydatetime())
+        traza.append(float(row["Close"]))
     precio = float(df["Close"].iloc[-1])
+    if not len(posteriores):
+        traza.append(precio)
     if (larga and precio <= sl) or (not larga and precio >= sl):
-        return cerrar_senal(s, -1.0, "SL", sl, ahora_utc, semana_id)
+        return fin(-1.0, "SL", sl, ahora_utc)
     if (larga and precio >= tp) or (not larga and precio <= tp):
-        return cerrar_senal(s, RR, "TP", tp, ahora_utc, semana_id)
+        return fin(RR, "TP", tp, ahora_utc)
+    s["traza"] = [num(v, 6) for v in traza[-(MAX_BARRAS + 2):]]
     r = ((precio - e) if larga else (e - precio)) / riesgo
     s["precio_actual"] = num(precio, 6)
     s["r_actual"] = round(r, 2)
