@@ -1,0 +1,19 @@
+{
+  "id": "/bot-quant-mercados/",
+  "name": "Apex Quant Markets",
+  "short_name": "ApexMarkets",
+  "description": "Señales cuantitativas de cripto, oro, petróleo, S&P 500 y grandes acciones en tiempo real",
+  "lang": "es",
+  "start_url": "./index.html",
+  "scope": "./",
+  "display": "standalone",
+  "orientation": "portrait",
+  "background_color": "#070e1d",
+  "theme_color": "#0c1322",
+  "categories": ["finance"],
+  "icons": [
+    { "src": "icon-192.png", "sizes": "192x192", "type": "image/png", "purpose": "any" },
+    { "src": "icon-512.png", "sizes": "512x512", "type": "image/png", "purpose": "any" },
+    { "src": "icon-maskable-512.png", "sizes": "512x512", "type": "image/png", "purpose": "maskable" }
+  ]
+}
