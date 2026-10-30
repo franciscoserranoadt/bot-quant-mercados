@@ -14,7 +14,7 @@ try:
 except Exception:   # sin la librería no hay datos, pero el bot no se rompe
     yf = None
 
-VERSION = "1.2"
+VERSION = "1.3"
 
 # ==============================================================================
 # CONFIGURACIÓN DE TELEGRAM Y WEB
@@ -83,6 +83,8 @@ BT_MIN_SENALES = int(os.getenv("BT_MIN_SENALES", "10"))   # señales históricas
 BT_PRIOR = 5.0                                            # "señales virtuales" de regresión a cero
 PROB_MINIMA = float(os.getenv("PROB_MINIMA", "0.30"))
 COOLDOWN_H = float(os.getenv("COOLDOWN_H", "6"))          # horas sin nueva señal tras cerrar una en el mismo activo
+APALANCAMIENTO_MAX = int(os.getenv("APALANCAMIENTO_MAX", "20"))      # tope de apalancamiento sugerido
+PERDIDA_MARGEN_SL = float(os.getenv("PERDIDA_MARGEN_SL", "0.10"))  # tocar el stop = perder como mucho el 10 % del margen
 VELAS_PREVIAS = 12          # velas anteriores a la entrada que se guardan como contexto para el gráfico de velas
 LOTE_DESCARGA = 20
 MAX_SENALES_GUARDADAS = 400
@@ -318,6 +320,18 @@ def enviar_telegram(mensaje, url_accion=None, texto_boton="📱 Abrir en Web App
 # ==============================================================================
 # CREACIÓN, SEGUIMIENTO Y LIQUIDACIÓN DE SEÑALES
 # ==============================================================================
+def apalancamiento_sugerido(entrada, sl):
+    """Apalancamiento con el que tocar el Stop Loss cuesta como mucho el 10 % del margen de la operación.
+    Así la liquidación queda unas 10 veces más lejos que el stop. Mínimo 1x, máximo APALANCAMIENTO_MAX."""
+    try:
+        dist = abs(float(entrada) - float(sl)) / float(entrada)
+    except Exception:
+        return 1
+    if not dist > 0:
+        return 1
+    return int(max(1, min(APALANCAMIENTO_MAX, math.floor(PERDIDA_MARGEN_SL / dist))))
+
+
 def crear_senal(tk, info, direccion, ts_barra, precio, atr, fila, stats, ahora_utc, semana_id):
     larga = direccion == "LONG"
     sl = precio - ATR_SL * atr if larga else precio + ATR_SL * atr
@@ -348,7 +362,7 @@ def crear_senal(tk, info, direccion, ts_barra, precio, atr, fila, stats, ahora_u
         "ticker": tk, "nombre": info["nombre"], "simbolo": info["simbolo"],
         "categoria": info["cat"], "cat_nombre": cat["name"], "cat_icono": cat["icono"],
         "direccion": direccion, "entrada": num(precio, 6), "sl": num(sl, 6), "tp": num(tp, 6),
-        "rr": round(RR, 2), "atr": num(atr, 6),
+        "rr": round(RR, 2), "atr": num(atr, 6), "apalancamiento": apalancamiento_sugerido(precio, sl),
         "fecha": fecha, "hora": hora, "fecha_hora_display": display,
         "ts_entrada_utc": ahora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timestamp_ms": int(ahora_utc.timestamp() * 1000),
@@ -376,6 +390,8 @@ def mensaje_senal(s):
         f"✅ <b>Take Profit:</b> {fp(s['tp'])} ({pct_tp:+.2f}%)\n"
         f"🛑 <b>Stop Loss:</b> {fp(s['sl'])} ({pct_sl:+.2f}%)\n"
         f"⚖️ <b>Riesgo/Beneficio:</b> 1:{s['rr']:g}\n"
+        f"🔧 <b>Apalancamiento sugerido:</b> {s['apalancamiento']}x (máx. {APALANCAMIENTO_MAX}x) • un stop ≈ "
+        f"{abs(pct_sl) * s['apalancamiento']:.1f}% del margen\n"
         f"📈 <b>Ventaja (backtest 1 año):</b> +{s['ventaja']}% por unidad arriesgada\n"
         f"🎲 <b>Prob. de acierto histórica:</b> {s['prob']}% ({s['n_bt']} señales)\n"
         f"💡 <b>Stake sugerido:</b> {s['stake']}/10 unidades de riesgo\n"
