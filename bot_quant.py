@@ -14,7 +14,7 @@ try:
 except Exception:   # sin la librería no hay datos, pero el bot no se rompe
     yf = None
 
-VERSION = "1.1"
+VERSION = "1.2"
 
 # ==============================================================================
 # CONFIGURACIÓN DE TELEGRAM Y WEB
@@ -83,6 +83,7 @@ BT_MIN_SENALES = int(os.getenv("BT_MIN_SENALES", "10"))   # señales históricas
 BT_PRIOR = 5.0                                            # "señales virtuales" de regresión a cero
 PROB_MINIMA = float(os.getenv("PROB_MINIMA", "0.30"))
 COOLDOWN_H = float(os.getenv("COOLDOWN_H", "6"))          # horas sin nueva señal tras cerrar una en el mismo activo
+VELAS_PREVIAS = 12          # velas anteriores a la entrada que se guardan como contexto para el gráfico de velas
 LOTE_DESCARGA = 20
 MAX_SENALES_GUARDADAS = 400
 
@@ -406,6 +407,18 @@ def cerrar_senal(s, r, motivo, precio, ts_utc, semana_id):
         s["liquidada_telegram"] = True
 
 
+def _sig(v):
+    """Redondeo a 6 cifras significativas para que datos.json no pese de más."""
+    try:
+        return float(f"{float(v):.6g}")
+    except Exception:
+        return None
+
+
+def _vela(ts, row):
+    return [int(ts.timestamp()), _sig(row["Open"]), _sig(row["High"]), _sig(row["Low"]), _sig(row["Close"])]
+
+
 def seguir_senal(s, df, ahora_utc, semana_id):
     ent = pd.Timestamp(datetime.fromisoformat(s["ts_entrada_utc"].replace("Z", "+00:00")))
     larga = s["direccion"] == "LONG"
@@ -413,13 +426,17 @@ def seguir_senal(s, df, ahora_utc, semana_id):
     riesgo = abs(e - sl) or 1e-12
     posteriores = df[df.index >= ent]
     traza = [e]   # recorrido del precio durante la operación (cierre de cada vela de 1 h) para el gráfico de la web
+    velas = [_vela(ts, row) for ts, row in df[df.index < ent].tail(VELAS_PREVIAS).iterrows()]
+    s["velas_entrada_idx"] = len(velas)   # las velas anteriores son contexto; a partir de aquí, la operación
 
     def fin(r, motivo, precio_fin, ts):
         traza.append(precio_fin)
         s["traza"] = [num(v, 6) for v in traza[-(MAX_BARRAS + 2):]]
+        s["velas"] = velas
         return cerrar_senal(s, r, motivo, precio_fin, ts, semana_id)
 
     for ts, row in posteriores.iterrows():
+        velas.append(_vela(ts, row))
         if larga:
             if row["Low"] <= sl:
                 return fin(-1.0, "SL", sl, ts.to_pydatetime())
@@ -439,6 +456,7 @@ def seguir_senal(s, df, ahora_utc, semana_id):
     if (larga and precio >= tp) or (not larga and precio <= tp):
         return fin(RR, "TP", tp, ahora_utc)
     s["traza"] = [num(v, 6) for v in traza[-(MAX_BARRAS + 2):]]
+    s["velas"] = velas
     r = ((precio - e) if larga else (e - precio)) / riesgo
     s["precio_actual"] = num(precio, 6)
     s["r_actual"] = round(r, 2)
@@ -676,6 +694,12 @@ def ejecutar_ciclo():
     senales = [s for s in senales if s.get("estado") == "ABIERTA" or (s.get("fecha_cierre") or s.get("fecha", "")) >= limite]
     senales = senales[-MAX_SENALES_GUARDADAS:]
 
+    # Las velas solo se guardan para señales abiertas y cerradas esta semana (para que datos.json no crezca)
+    for s in senales:
+        if s.get("estado") == "CERRADA" and s.get("semana_cierre") != semana_id:
+            s.pop("velas", None)
+            s.pop("velas_entrada_idx", None)
+
     tg_semana = [s for s in senales if s.get("telegram_enviado") and s.get("estado") == "CERRADA" and s.get("semana_cierre") == semana_id]
     datos_completos = {
         "version_bot": VERSION,
@@ -701,7 +725,7 @@ def ejecutar_ciclo():
                         "descargas_fallidas": ESTADO_DATOS["descargas_fallidas"]},
     }
     with open("datos.json", "w", encoding="utf-8") as f:
-        json.dump(datos_completos, f, ensure_ascii=False, indent=1)
+        json.dump(datos_completos, f, ensure_ascii=False, separators=(",", ":"))
     print(f"📁 datos.json guardado. Activos: {len(activos_web)} | Señales guardadas: {len(senales)} | Nuevas: {nuevas}")
 
 
