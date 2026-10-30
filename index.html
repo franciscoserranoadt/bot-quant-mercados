@@ -82,7 +82,7 @@
             </span>
           </h1>
           <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.1 · Bot --</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.2 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -445,6 +445,8 @@
     // LOGOS DE CADA ACTIVO (como los escudos de los equipos)
     // Si un logo no carga se prueba el siguiente; si fallan todos, se muestran las siglas.
     // =========================================================================
+    // Empresas cuyo logo sale en blanco en la fuente principal: se usa el icono de su web oficial
+    const LOGO_DOMINIO = { 'V': 'visa.com', 'ABBV': 'abbvie.com', 'UNH': 'unitedhealthgroup.com', 'IBM': 'ibm.com' };
     const LOGO_ESPECIAL = { 'GC=F': '🥇', 'CL=F': '🛢️', 'BZ=F': '🛢️', '^GSPC': '🇺🇸' };
 
     function logoUrls(a) {
@@ -455,6 +457,10 @@
       }
       if (a.categoria === 'acciones') {
         const t = a.ticker || '';
+        if (LOGO_DOMINIO[t]) {
+          return [`https://www.google.com/s2/favicons?domain=${LOGO_DOMINIO[t]}&sz=128`,
+                  `https://assets.parqet.com/logos/symbol/${t.replace('-', '.')}?format=png`];
+        }
         return [`https://financialmodelingprep.com/image-stock/${t}.png`,
                 `https://assets.parqet.com/logos/symbol/${t.replace('-', '.')}?format=png`];
       }
@@ -630,7 +636,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.1';
+    const VERSION_WEB = '1.2';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
