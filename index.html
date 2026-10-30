@@ -82,7 +82,7 @@
             </span>
           </h1>
           <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.3 · Bot --</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.4 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -364,6 +364,19 @@
     </div>
   </div>
 
+  <!-- MODAL GRÁFICO DE VELAS -->
+  <div id="modalVelas" class="hidden fixed inset-0 z-50 bg-black/80 items-end justify-center">
+    <div class="w-full max-w-md max-h-[92vh] overflow-y-auto rounded-t-3xl bg-brand-surface border border-brand-border p-4 space-y-3 custom-scroll">
+      <div class="flex items-center justify-between gap-2">
+        <div id="velasTitulo" class="min-w-0"></div>
+        <button id="btnCerrarVelas" class="w-8 h-8 rounded-lg bg-slate-800/80 text-slate-300 border border-slate-700/60 flex items-center justify-center flex-shrink-0" title="Cerrar">
+          <svg class="w-4 h-4" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M6 18L18 6M6 6l12 12"></path></svg>
+        </button>
+      </div>
+      <div id="velasContenido" class="space-y-3"></div>
+    </div>
+  </div>
+
   <script src="https://cdn.tailwindcss.com"></script>
   <script>
     tailwind.config = {
@@ -516,8 +529,8 @@
         ? `<line x1="0" y1="${y(v)}" x2="100" y2="${y(v)}" stroke="${c}" stroke-width="1" stroke-dasharray="${guion}" vector-effect="non-scaling-stroke" opacity="0.8"/>` : '';
       const horas = t.length - 1;
       return `
-        <div>
-          <div class="h-16 w-full bg-slate-900/80 rounded-lg p-1 border border-slate-800/80">
+        <div onclick="event.stopPropagation(); abrirVelas('${s.id}')" class="cursor-pointer active:scale-[0.99] transition">
+          <div class="h-16 w-full bg-slate-900/80 rounded-lg p-1 border border-slate-800/80 hover:border-slate-600">
             <svg class="w-full h-full overflow-visible" viewBox="0 0 100 40" preserveAspectRatio="none">
               ${linea(s.tp, '#34d399', '4 3')}
               ${linea(s.entrada, '#94a3b8', '2 3')}
@@ -530,7 +543,100 @@
             <span class="flex items-center gap-2"><span class="text-emerald-400">- - TP</span><span class="text-slate-400">· · Entrada</span><span class="text-rose-400">- - SL</span></span>
             <span>${s.estado === 'CERRADA' ? 'Cierre' : 'Ahora'} (${horas} h)</span>
           </div>
+          <div class="text-center text-[8px] text-brand-highlight mt-0.5">🔍 Toca para ver el gráfico de velas</div>
         </div>`;
+    }
+
+    // =========================================================================
+    // GRÁFICO DE VELAS A PANTALLA COMPLETA (al tocar el gráfico de línea)
+    // =========================================================================
+    function horaMadrid(seg) {
+      try {
+        return new Date(seg * 1000).toLocaleString('es-ES', { timeZone: 'Europe/Madrid', day: '2-digit', month: '2-digit', hour: '2-digit', minute: '2-digit' });
+      } catch (e) { return ''; }
+    }
+
+    function graficoVelas(s) {
+      const v = (s.velas || []).filter(x => Array.isArray(x) && x.length >= 5);
+      if (!v.length) {
+        return `<div class="p-6 rounded-2xl bg-brand-card border border-brand-border text-center text-xs text-slate-400">Velas no disponibles para esta señal.<br><span class="text-[10px] text-slate-500">Solo se guardan para las señales abiertas y las cerradas esta semana. Si la señal es nueva, aparecerán en la próxima actualización del bot.</span></div>`;
+      }
+      const W = 360, H = 260, n = v.length, paso = W / n, cuerpo = Math.max(1.2, paso * 0.62);
+      const niveles = [s.tp, s.sl, s.entrada, s.precio_cierre].filter(x => typeof x === 'number');
+      let min = Math.min(...v.map(x => x[3]), ...niveles), max = Math.max(...v.map(x => x[2]), ...niveles);
+      const margen = (max - min) * 0.06 || Math.abs(max) * 0.001 || 1;
+      min -= margen; max += margen;
+      const y = p => H - ((p - min) / (max - min)) * H;
+      const velasSvg = v.map((x, i) => {
+        const [, o, h, l, c] = x;
+        const cx = paso * i + paso / 2;
+        const col = c >= o ? '#00f59b' : '#ff4b4b';
+        const yt = Math.min(y(o), y(c)), alto = Math.max(1.2, Math.abs(y(o) - y(c)));
+        return `<line x1="${cx.toFixed(2)}" y1="${y(h).toFixed(2)}" x2="${cx.toFixed(2)}" y2="${y(l).toFixed(2)}" stroke="${col}" stroke-width="1" vector-effect="non-scaling-stroke"/>` +
+               `<rect x="${(cx - cuerpo / 2).toFixed(2)}" y="${yt.toFixed(2)}" width="${cuerpo.toFixed(2)}" height="${alto.toFixed(2)}" fill="${col}" ${c >= o ? 'fill-opacity="0.85"' : ''}/>`;
+      }).join('');
+      const linea = (p, c, guion) => (typeof p === 'number')
+        ? `<line x1="0" y1="${y(p).toFixed(2)}" x2="${W}" y2="${y(p).toFixed(2)}" stroke="${c}" stroke-width="1" stroke-dasharray="${guion}" vector-effect="non-scaling-stroke"/>` : '';
+      const idx = Number(s.velas_entrada_idx);
+      const xEntrada = (idx > 0 && idx < n) ? paso * idx : null;
+      const marcaEntrada = xEntrada !== null
+        ? `<line x1="${xEntrada.toFixed(2)}" y1="0" x2="${xEntrada.toFixed(2)}" y2="${H}" stroke="#00d2ff" stroke-width="1" stroke-dasharray="3 3" vector-effect="non-scaling-stroke" opacity="0.7"/>` : '';
+      const etiqueta = (p, txt, cls) => (typeof p === 'number')
+        ? `<span class="absolute right-1 -translate-y-1/2 px-1 rounded text-[8px] font-mono font-bold ${cls}" style="top:${(y(p) / H * 100).toFixed(2)}%">${txt} ${fmtPrecio(p)}</span>` : '';
+      return `
+        <div class="p-2 rounded-2xl bg-brand-card border border-brand-border">
+          <div class="relative w-full h-72 bg-slate-900/80 rounded-xl overflow-hidden">
+            <svg class="absolute inset-0 w-full h-full" viewBox="0 0 ${W} ${H}" preserveAspectRatio="none">
+              ${linea(s.tp, '#34d399', '5 4')}
+              ${linea(s.entrada, '#94a3b8', '2 3')}
+              ${linea(s.sl, '#fb7185', '5 4')}
+              ${marcaEntrada}
+              ${velasSvg}
+            </svg>
+            ${etiqueta(s.tp, 'TP', 'bg-emerald-500/20 text-emerald-300')}
+            ${etiqueta(s.entrada, 'ENT', 'bg-slate-700/70 text-slate-200')}
+            ${etiqueta(s.sl, 'SL', 'bg-rose-500/20 text-rose-300')}
+          </div>
+          <div class="flex items-center justify-between text-[9px] font-mono text-slate-500 mt-1.5 px-1">
+            <span>${horaMadrid(v[0][0])}</span>
+            <span class="text-brand-highlight">┆ entrada</span>
+            <span>${horaMadrid(v[n - 1][0])}</span>
+          </div>
+        </div>`;
+    }
+
+    function abrirVelas(id) {
+      const s = state.senales.find(x => x.id === id);
+      if (!s) return;
+      const cerrada = s.estado === 'CERRADA';
+      const r = cerrada ? Number(s.resultado_r) || 0 : Number(s.r_actual) || 0;
+      document.getElementById('velasTitulo').innerHTML = `
+        <div class="flex items-center gap-2">
+          ${avatar(s, true)}
+          <div class="min-w-0">
+            <h2 class="text-sm font-extrabold text-white truncate">${s.nombre} (${s.simbolo})</h2>
+            <p class="text-[10px] text-slate-400">Velas de 1 h · ${s.direccion === 'LONG' ? '📈 LONG (compra)' : '📉 SHORT (venta)'}</p>
+          </div>
+        </div>`;
+      const datos = (et, val, cls) => `<div class="py-1.5 rounded-lg bg-slate-900/60 border border-slate-800"><span class="text-[8px] text-slate-500 uppercase font-bold block">${et}</span><span class="text-[11px] font-extrabold font-mono ${cls}">${val}</span></div>`;
+      document.getElementById('velasContenido').innerHTML = `
+        ${graficoVelas(s)}
+        <div class="grid grid-cols-3 gap-1.5 text-center">
+          ${datos('Entrada', fmtPrecio(s.entrada), 'text-white')}
+          ${datos('Take Profit', fmtPrecio(s.tp), 'text-emerald-400')}
+          ${datos('Stop Loss', fmtPrecio(s.sl), 'text-rose-400')}
+          ${datos(cerrada ? 'Cierre' : 'Precio actual', fmtPrecio(cerrada ? s.precio_cierre : s.precio_actual), 'text-brand-primary')}
+          ${datos('Resultado', fmtR(r), colorR(r))}
+          ${datos('Estado', cerrada ? (s.motivo_cierre === 'TP' ? 'TAKE PROFIT' : (s.motivo_cierre === 'SL' ? 'STOP LOSS' : 'POR TIEMPO')) : 'ABIERTA', cerrada ? colorR(r) : 'text-rose-400')}
+        </div>
+        <p class="text-[9px] text-slate-500 leading-relaxed">Cada vela es 1 hora: el cuerpo va de la apertura al cierre (verde si sube, rojo si baja) y las mechas marcan el máximo y el mínimo. La línea azul vertical marca la entrada; a su izquierda, las horas previas como contexto.</p>`;
+      const modal = document.getElementById('modalVelas');
+      modal.classList.remove('hidden'); modal.classList.add('flex');
+    }
+
+    function cerrarVelas() {
+      const modal = document.getElementById('modalVelas');
+      modal.classList.add('hidden'); modal.classList.remove('flex');
     }
 
     function contextoActivo(a) {
@@ -676,7 +782,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.3';
+    const VERSION_WEB = '1.4';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
@@ -1181,6 +1287,9 @@
       document.getElementById('btnHist').addEventListener('click', abrirHistorico);
       document.getElementById('btnCerrarHist').addEventListener('click', cerrarHistorico);
       document.getElementById('modalHist').addEventListener('click', (e) => { if (e.target.id === 'modalHist') cerrarHistorico(); });
+
+      document.getElementById('btnCerrarVelas').addEventListener('click', cerrarVelas);
+      document.getElementById('modalVelas').addEventListener('click', (e) => { if (e.target.id === 'modalVelas') cerrarVelas(); });
 
       document.getElementById('btnOled').addEventListener('click', () => {
         document.body.classList.toggle('bg-black');
