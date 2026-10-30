@@ -82,7 +82,7 @@
             </span>
           </h1>
           <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.2 · Bot --</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.3 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -493,6 +493,46 @@
       return `<img src="${urls[0]}" data-alt="${urls.slice(1).join('|')}" data-cls="${clsTexto}" data-txt="${siglas}" onerror="logoFallo(this)" loading="lazy" alt="" class="${grande ? 'w-6 h-6' : 'w-5 h-5'} rounded-full bg-white object-contain p-[2px] flex-shrink-0">`;
     }
 
+    // =========================================================================
+    // GRÁFICO DEL TRADE: recorrido del precio desde la entrada, con TP, entrada y SL
+    // =========================================================================
+    function graficoTrade(s) {
+      const t = (s.traza || []).filter(v => typeof v === 'number');
+      if (t.length < 2) {
+        return s.estado === 'ABIERTA'
+          ? `<div class="text-[9px] text-slate-500">📉 El gráfico del trade aparecerá al cerrar la primera vela de 1 h.</div>`
+          : '';
+      }
+      const vals = t.concat([s.tp, s.sl, s.entrada].filter(v => typeof v === 'number'));
+      let min = Math.min(...vals), max = Math.max(...vals);
+      const margen = (max - min) * 0.08 || Math.abs(max) * 0.001 || 1;
+      min -= margen; max += margen;
+      const y = v => (38 - ((v - min) / (max - min)) * 36).toFixed(2);
+      const x = i => ((i / (t.length - 1)) * 100).toFixed(2);
+      const ruta = t.map((v, i) => `${i === 0 ? 'M' : 'L'} ${x(i)} ${y(v)}`).join(' ');
+      const r = s.estado === 'CERRADA' ? Number(s.resultado_r) || 0 : Number(s.r_actual) || 0;
+      const color = r >= 0 ? '#00f59b' : '#ff4b4b';
+      const linea = (v, c, guion) => (typeof v === 'number')
+        ? `<line x1="0" y1="${y(v)}" x2="100" y2="${y(v)}" stroke="${c}" stroke-width="1" stroke-dasharray="${guion}" vector-effect="non-scaling-stroke" opacity="0.8"/>` : '';
+      const horas = t.length - 1;
+      return `
+        <div>
+          <div class="h-16 w-full bg-slate-900/80 rounded-lg p-1 border border-slate-800/80">
+            <svg class="w-full h-full overflow-visible" viewBox="0 0 100 40" preserveAspectRatio="none">
+              ${linea(s.tp, '#34d399', '4 3')}
+              ${linea(s.entrada, '#94a3b8', '2 3')}
+              ${linea(s.sl, '#fb7185', '4 3')}
+              <path d="${ruta}" fill="none" stroke="${color}" stroke-width="2" stroke-linecap="round" stroke-linejoin="round" vector-effect="non-scaling-stroke"/>
+            </svg>
+          </div>
+          <div class="flex items-center justify-between text-[8px] font-mono text-slate-500 mt-1">
+            <span>Entrada</span>
+            <span class="flex items-center gap-2"><span class="text-emerald-400">- - TP</span><span class="text-slate-400">· · Entrada</span><span class="text-rose-400">- - SL</span></span>
+            <span>${s.estado === 'CERRADA' ? 'Cierre' : 'Ahora'} (${horas} h)</span>
+          </div>
+        </div>`;
+    }
+
     function contextoActivo(a) {
       if (!a) return '';
       return `
@@ -636,7 +676,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.2';
+    const VERSION_WEB = '1.3';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
@@ -964,6 +1004,7 @@
               <div class="py-1.5 rounded-lg bg-emerald-500/10 border border-emerald-500/25"><span class="text-[8px] text-emerald-400/80 uppercase font-bold block">Take Profit</span><span class="text-[11px] font-extrabold text-emerald-400 font-mono">${fmtPrecio(s.tp)}</span><span class="text-[8px] text-emerald-400/70 font-mono block">${pctTP >= 0 ? '+' : ''}${pctTP.toFixed(2)}%</span></div>
               <div class="py-1.5 rounded-lg bg-rose-500/10 border border-rose-500/25"><span class="text-[8px] text-rose-400/80 uppercase font-bold block">Stop Loss</span><span class="text-[11px] font-extrabold text-rose-400 font-mono">${fmtPrecio(s.sl)}</span><span class="text-[8px] text-rose-400/70 font-mono block">${pctSL >= 0 ? '+' : ''}${pctSL.toFixed(2)}%</span></div>
             </div>
+            ${graficoTrade(s)}
             <div>
               <div class="flex items-center justify-between text-[10px] mb-1">
                 <span class="text-slate-400 flex items-center gap-1">
@@ -1040,6 +1081,7 @@
             <div class="text-[11px] font-mono text-slate-400">
               Entrada <strong class="text-white">${fmtPrecio(s.entrada)}</strong> · TP <strong class="text-emerald-400">${fmtPrecio(s.tp)}</strong> · SL <strong class="text-rose-400">${fmtPrecio(s.sl)}</strong>${cerrada ? ` · Cierre <strong class="text-white">${fmtPrecio(s.precio_cierre)}</strong>` : ''}
             </div>
+            ${graficoTrade(s)}
             <div class="flex items-center justify-between pt-1 border-t border-slate-800/80 text-xs font-mono text-slate-300">
               <div class="flex items-center gap-3">
                 <span>Ventaja: <strong class="text-emerald-400">${ventaja}</strong></span>
