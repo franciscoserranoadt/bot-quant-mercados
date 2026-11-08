@@ -82,7 +82,7 @@
             </span>
           </h1>
           <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.6 · Bot --</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.8 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -467,9 +467,10 @@
     const APALANCAMIENTO_MAX = 20;
     function apalancamiento(s) {
       if (Number(s.apalancamiento) > 0) return Number(s.apalancamiento);
+      if (s.categoria === 'cripto') return 5;   // cripto: stop del 2 % y 5x fijo
       const dist = Math.abs(s.entrada - s.sl) / s.entrada;
       if (!(dist > 0)) return 1;
-      return Math.max(1, Math.min(APALANCAMIENTO_MAX, Math.floor(0.10 / dist)));
+      return Math.max(1, Math.min(APALANCAMIENTO_MAX, Math.floor(Math.round((0.10 / dist) * 1000) / 1000)));
     }
     function chipApalancamiento(s) {
       return `<span class="px-2 py-0.5 rounded-md text-[10px] font-extrabold bg-sky-950/80 text-sky-300 border border-sky-500/30 font-mono whitespace-nowrap" title="Apalancamiento sugerido">⚡ ${apalancamiento(s)}x</span>`;
@@ -682,7 +683,7 @@
 
     function lineaBacktest(a) {
       const f = (b, d) => (b && b.n) ? `${d}: ${(b.p * 100).toFixed(0)}% en ${b.n} (ventaja ${b.v >= 0 ? '+' : ''}${b.v}%)` : `${d}: sin señales`;
-      return `<div class="text-[10px] text-slate-500 mt-1">📐 Histórico 1 año · ${f(a.bt_long, 'LONG')} · ${f(a.bt_short, 'SHORT')}</div>`;
+      return `<div class="text-[10px] text-slate-500 mt-1">📐 Histórico propio 2 años (con costes) · ${f(a.bt_long, 'LONG')} · ${f(a.bt_short, 'SHORT')}</div>`;
     }
 
     async function cargarDatos() {
@@ -812,7 +813,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.6';
+    const VERSION_WEB = '1.8';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
@@ -1209,7 +1210,7 @@
               </div>
             </div>
             ${s.prob !== null && s.prob !== undefined
-              ? `<div class="text-[10px] ${s.confirmado_bt ? 'text-emerald-400' : 'text-slate-400'}">📐 Backtest 1 año: ${s.prob}% de aciertos en ${s.n_bt} señales · ${s.confirmado_bt ? 'respalda la operación ✓' : 'no respalda la operación'}</div>`
+              ? `<div class="text-[10px] ${s.confirmado_bt ? 'text-emerald-400' : 'text-slate-400'}">📐 Backtest 2 años · ${s.cat_nombre || 'categoría'} (con costes): ${s.prob}% de aciertos en ${s.n_bt} señales · ${s.confirmado_bt ? 'respalda la operación ✓' : 'no respalda la operación'}</div>`
               : '<div class="text-[10px] text-slate-500">📐 Sin histórico suficiente</div>'}
             ${notaEnvio}
             ${contextoActivo(a)}

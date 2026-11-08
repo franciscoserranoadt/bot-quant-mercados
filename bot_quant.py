@@ -14,7 +14,7 @@ try:
 except Exception:   # sin la librería no hay datos, pero el bot no se rompe
     yf = None
 
-VERSION = "1.3"
+VERSION = "1.5"
 
 # ==============================================================================
 # CONFIGURACIÓN DE TELEGRAM Y WEB
@@ -71,15 +71,26 @@ for _t, _n in ACCIONES:
 # ==============================================================================
 INTERVALO = "1h"
 PERIODO_LIVE = "60d"            # velas para calcular la señal de cada ciclo
-PERIODO_BT = "1y"               # velas para el histórico (backtest) de cada activo
+PERIODO_BT = "729d"             # velas para el backtest: 2 años (máximo que da Yahoo en velas de 1 h)
 BT_TTL_H = float(os.getenv("BT_TTL_H", "24"))            # el backtest se recalcula una vez al día
-ATR_SL = float(os.getenv("ATR_SL", "1.5"))               # stop loss = 1,5 x ATR
+ATR_SL = float(os.getenv("ATR_SL", "1.5"))               # stop loss = 1,5 x ATR (acciones, índice y materias primas)
 ATR_TP = float(os.getenv("ATR_TP", "3.0"))               # take profit = 3 x ATR
 RR = ATR_TP / ATR_SL                                      # beneficio/riesgo (2,0 por defecto)
-MAX_BARRAS = int(os.getenv("MAX_BARRAS", "48"))           # vida máxima de una señal (velas de 1 h)
+MAX_BARRAS = int(os.getenv("MAX_BARRAS", "48"))           # vida máxima por defecto (velas de 1 h)
+# Configuración por mercado:
+#   sl_pct    -> stop fijo en % del precio (None = stop por volatilidad, 1,5 x ATR)
+#   apal_fijo -> apalancamiento fijo (None = calculado según la distancia al stop, máx. 20x)
+#   vida      -> velas de 1 h que puede durar una señal antes de cerrarse a mercado
+#   coste_pct -> coste estimado de ida y vuelta (comisión + spread) que se descuenta en el backtest
+CONFIG_CAT = {
+    "cripto":   {"sl_pct": 0.02, "apal_fijo": 5,    "vida": 48,  "coste_pct": 0.0015},
+    "materias": {"sl_pct": None, "apal_fijo": None, "vida": 48,  "coste_pct": 0.0008},
+    "indices":  {"sl_pct": None, "apal_fijo": None, "vida": 120, "coste_pct": 0.0005},
+    "acciones": {"sl_pct": None, "apal_fijo": None, "vida": 120, "coste_pct": 0.0010},
+}
 EV_MINIMO_PCT = float(os.getenv("EV_MINIMO_PCT", "15"))   # ventaja mínima (expectativa en % del riesgo) para Telegram
 EV_MAXIMO_PCT = 150.0                                     # por encima: dato sospechoso
-BT_MIN_SENALES = int(os.getenv("BT_MIN_SENALES", "10"))   # señales históricas mínimas para confiar en el backtest
+BT_MIN_SENALES = int(os.getenv("BT_MIN_SENALES", "30"))   # señales históricas mínimas (de toda la categoría) para confiar
 BT_PRIOR = 5.0                                            # "señales virtuales" de regresión a cero
 PROB_MINIMA = float(os.getenv("PROB_MINIMA", "0.30"))
 COOLDOWN_H = float(os.getenv("COOLDOWN_H", "6"))          # horas sin nueva señal tras cerrar una en el mismo activo
@@ -179,68 +190,110 @@ def tendencia_de(row):
 # ==============================================================================
 # BACKTEST PROPIO: la misma regla aplicada al último año de cada activo
 # ==============================================================================
-def _simular(close, high, low, atr, i, direccion):
+def cfg_cat(cat):
+    return CONFIG_CAT.get(cat, CONFIG_CAT["acciones"])
+
+
+def niveles(precio, direccion, cat, atr):
+    """Stop Loss y Take Profit según el mercado: cripto con stop fijo en %; el resto, por volatilidad (ATR).
+    Devuelve (stop, objetivo, distancia_al_stop). Se usa igual en el backtest y en vivo."""
+    sl_pct = cfg_cat(cat)["sl_pct"]
+    dist = precio * sl_pct if sl_pct else ATR_SL * atr
+    if direccion == "LONG":
+        return precio - dist, precio + RR * dist, dist
+    return precio + dist, precio - RR * dist, dist
+
+
+def vida_max(cat):
+    return int(cfg_cat(cat)["vida"] or MAX_BARRAS)
+
+
+def _simular(close, high, low, atr, i, direccion, cat):
+    """Resultado en R de una señal histórica, ya descontados los costes estimados."""
     e, a = close[i], atr[i]
-    if not (a > 0):
+    if not (e > 0 and a > 0):
         return None
     n = len(close)
     larga = direccion == "LONG"
-    sl = e - ATR_SL * a if larga else e + ATR_SL * a
-    tp = e + ATR_TP * a if larga else e - ATR_TP * a
-    fin = min(n - 1, i + MAX_BARRAS)
+    sl, tp, dist = niveles(e, direccion, cat, a)
+    if not dist > 0:
+        return None
+    coste_r = cfg_cat(cat)["coste_pct"] * e / dist
+    mb = vida_max(cat)
+    fin = min(n - 1, i + mb)
     for j in range(i + 1, fin + 1):
         if larga:
             if low[j] <= sl:
-                return -1.0
+                return -1.0 - coste_r
             if high[j] >= tp:
-                return RR
+                return RR - coste_r
         else:
             if high[j] >= sl:
-                return -1.0
+                return -1.0 - coste_r
             if low[j] <= tp:
-                return RR
-    if i + MAX_BARRAS <= n - 1:
-        r = ((close[fin] - e) if larga else (e - close[fin])) / (ATR_SL * a)
-        return max(-1.0, min(RR, r))
+                return RR - coste_r
+    if i + mb <= n - 1:
+        r = ((close[fin] - e) if larga else (e - close[fin])) / dist
+        return max(-1.0, min(RR, r)) - coste_r
     return None   # todavía sin resolver: no cuenta
 
 
-def backtest_activo(df):
+def resultados_activo(df, cat):
+    """Resultados en R (con costes) de todas las señales históricas de un activo, por dirección."""
     ind = indicadores(df)
     close, high, low, atr = (ind[k].to_numpy() for k in ("close", "high", "low", "atr"))
-    res = {}
-    for direccion, col in (("LONG", "long"), ("SHORT", "short")):
-        rs = [r for r in (_simular(close, high, low, atr, i, direccion) for i in np.where(ind[col].to_numpy())[0])
-              if r is not None]
-        n = len(rs)
-        if n == 0:
-            res[direccion] = {"n": 0, "p": None, "v": None, "r_medio": None}
-            continue
-        wins = sum(1 for r in rs if r > 0)
-        res[direccion] = {"n": n, "p": round(wins / n, 4), "v": round(sum(rs) / (n + BT_PRIOR) * 100, 1),
-                          "r_medio": round(sum(rs) / n, 3)}
-    return res
+    return {d: [r for r in (_simular(close, high, low, atr, i, d, cat) for i in np.where(ind[col].to_numpy())[0])
+                if r is not None]
+            for d, col in (("LONG", "long"), ("SHORT", "short"))}
+
+
+def resumir(rs):
+    n = len(rs)
+    if n == 0:
+        return {"n": 0, "p": None, "v": None, "r_medio": None}
+    wins = sum(1 for r in rs if r > 0)
+    return {"n": n, "p": round(wins / n, 4), "v": round(sum(rs) / (n + BT_PRIOR) * 100, 1),
+            "r_medio": round(sum(rs) / n, 3)}
+
+
+# Si cambia cualquier parámetro, el backtest se rehace desde cero
+PARAMS_BT = f"v4_ATR{ATR_SL}-{ATR_TP}_P{PERIODO_BT}_PRIOR{BT_PRIOR}_{sorted((k, sorted(v.items())) for k, v in CONFIG_CAT.items())}"
 
 
 def actualizar_backtest(previo, tickers, ahora_utc):
+    """Backtest de 2 años con costes. La ventaja de cada señal se calcula AGRUPANDO todos los activos de su
+    categoría (cripto, materias primas, índice, acciones) y dirección: mucha más muestra y menos ruido."""
+    previo = previo or {}
     try:
-        t = datetime.fromisoformat((previo or {}).get("t", "").replace("Z", "+00:00"))
-        if previo.get("e") and (ahora_utc - t).total_seconds() < BT_TTL_H * 3600:
+        t = datetime.fromisoformat(previo.get("t", "").replace("Z", "+00:00"))
+        if (previo.get("cat") and previo.get("params") == PARAMS_BT
+                and (ahora_utc - t).total_seconds() < BT_TTL_H * 3600):
             return previo
     except Exception:
         pass
-    print(f"📐 Recalculando backtest de 1 año para {len(tickers)} activos...")
+    print(f"📐 Recalculando backtest de 2 años (por categoría, con costes) para {len(tickers)} activos...")
     datos_bt = descargar(tickers, PERIODO_BT)
-    if not datos_bt:
-        return previo or {"t": "", "e": {}}
-    e = dict((previo or {}).get("e") or {})
+    mismos_params = previo.get("params") == PARAMS_BT and previo.get("cat")
+    if len(datos_bt) < 0.5 * len(tickers):
+        print(f"   Aviso: solo {len(datos_bt)} activos descargados; se mantiene el backtest anterior")
+        return previo if mismos_params else {"t": "", "params": "", "cat": {}, "e": {}}
+    por_cat, e = {}, {}
     for tk, df in datos_bt.items():
+        cat = ACTIVOS[tk]["cat"]
         try:
-            e[tk] = backtest_activo(df)
+            res = resultados_activo(df, cat)
         except Exception as ex:
             print(f"   Aviso backtest {tk}: {ex}")
+            continue
+        e[tk] = {d: resumir(rs) for d, rs in res.items()}
+        for d, rs in res.items():
+            por_cat.setdefault(cat, {}).setdefault(d, []).extend(rs)
+    cats = {c: {d: resumir(rs) for d, rs in dirs.items()} for c, dirs in por_cat.items()}
+    for c, dirs in cats.items():
+        print(f"   📊 {CATEGORIAS[c]['name']}: " + " | ".join(
+            f"{d} n={v['n']} acierto={v['p']} ventaja={v['v']}%" for d, v in dirs.items()))
     print(f"📐 Backtest listo ({len(datos_bt)} activos)")
-    return {"t": ahora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "e": e}
+    return {"t": ahora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"), "params": PARAMS_BT, "cat": cats, "e": e}
 
 
 # ==============================================================================
@@ -320,29 +373,31 @@ def enviar_telegram(mensaje, url_accion=None, texto_boton="📱 Abrir en Web App
 # ==============================================================================
 # CREACIÓN, SEGUIMIENTO Y LIQUIDACIÓN DE SEÑALES
 # ==============================================================================
-def apalancamiento_sugerido(entrada, sl):
+def apalancamiento_sugerido(entrada, sl, cat=None):
     """Apalancamiento con el que tocar el Stop Loss cuesta como mucho el 10 % del margen de la operación.
     Así la liquidación queda unas 10 veces más lejos que el stop. Mínimo 1x, máximo APALANCAMIENTO_MAX."""
+    fijo = cfg_cat(cat)["apal_fijo"] if cat else None
+    if fijo:
+        return int(fijo)   # cripto: 5x fijo
     try:
         dist = abs(float(entrada) - float(sl)) / float(entrada)
     except Exception:
         return 1
     if not dist > 0:
         return 1
-    return int(max(1, min(APALANCAMIENTO_MAX, math.floor(PERDIDA_MARGEN_SL / dist))))
+    return int(max(1, min(APALANCAMIENTO_MAX, math.floor(round(PERDIDA_MARGEN_SL / dist, 3)))))
 
 
 def crear_senal(tk, info, direccion, ts_barra, precio, atr, fila, stats, ahora_utc, semana_id):
     larga = direccion == "LONG"
-    sl = precio - ATR_SL * atr if larga else precio + ATR_SL * atr
-    tp = precio + ATR_TP * atr if larga else precio - ATR_TP * atr
+    sl, tp, _ = niveles(precio, direccion, info["cat"], atr)
     n_bt = (stats or {}).get("n") or 0
     p = (stats or {}).get("p")
     v = (stats or {}).get("v")
     nota = None
     alertable = False
     if n_bt < BT_MIN_SENALES or p is None or v is None:
-        nota = f"Histórico insuficiente ({n_bt}/{BT_MIN_SENALES} señales en 1 año): no se envía a Telegram"
+        nota = f"Histórico insuficiente ({n_bt}/{BT_MIN_SENALES} señales de la categoría en 2 años): no se envía a Telegram"
     elif v > EV_MAXIMO_PCT:
         nota = "Ventaja histórica anómala: no se envía a Telegram"
     elif v < EV_MINIMO_PCT:
@@ -362,7 +417,8 @@ def crear_senal(tk, info, direccion, ts_barra, precio, atr, fila, stats, ahora_u
         "ticker": tk, "nombre": info["nombre"], "simbolo": info["simbolo"],
         "categoria": info["cat"], "cat_nombre": cat["name"], "cat_icono": cat["icono"],
         "direccion": direccion, "entrada": num(precio, 6), "sl": num(sl, 6), "tp": num(tp, 6),
-        "rr": round(RR, 2), "atr": num(atr, 6), "apalancamiento": apalancamiento_sugerido(precio, sl),
+        "rr": round(RR, 2), "atr": num(atr, 6), "apalancamiento": apalancamiento_sugerido(precio, sl, info["cat"]),
+        "max_barras": vida_max(info["cat"]),
         "fecha": fecha, "hora": hora, "fecha_hora_display": display,
         "ts_entrada_utc": ahora_utc.strftime("%Y-%m-%dT%H:%M:%SZ"),
         "timestamp_ms": int(ahora_utc.timestamp() * 1000),
@@ -392,11 +448,11 @@ def mensaje_senal(s):
         f"⚖️ <b>Riesgo/Beneficio:</b> 1:{s['rr']:g}\n"
         f"🔧 <b>Apalancamiento sugerido:</b> {s['apalancamiento']}x (máx. {APALANCAMIENTO_MAX}x) • un stop ≈ "
         f"{abs(pct_sl) * s['apalancamiento']:.1f}% del margen\n"
-        f"📈 <b>Ventaja (backtest 1 año):</b> +{s['ventaja']}% por unidad arriesgada\n"
-        f"🎲 <b>Prob. de acierto histórica:</b> {s['prob']}% ({s['n_bt']} señales)\n"
+        f"📈 <b>Ventaja (backtest 2 años, {s['cat_nombre'].lower()}, con costes):</b> +{s['ventaja']}% por unidad arriesgada\n"
+        f"🎲 <b>Prob. de acierto histórica:</b> {s['prob']}% ({s['n_bt']} señales de la categoría)\n"
         f"💡 <b>Stake sugerido:</b> {s['stake']}/10 unidades de riesgo\n"
         f"📊 <b>Contexto:</b> tendencia {s['tendencia'].lower()} • RSI {s['rsi']}\n"
-        f"⏳ <b>Validez máxima:</b> {MAX_BARRAS} velas de 1 h (después se cierra a mercado)\n\n"
+        f"⏳ <b>Validez máxima:</b> {s.get('max_barras', MAX_BARRAS)} velas de 1 h (después se cierra a mercado)\n\n"
         f"⚡ <i>Apex Quant Engine • Precios reales de mercado</i>"
     )
 
@@ -441,13 +497,14 @@ def seguir_senal(s, df, ahora_utc, semana_id):
     e, sl, tp = s["entrada"], s["sl"], s["tp"]
     riesgo = abs(e - sl) or 1e-12
     posteriores = df[df.index >= ent]
+    mb = int(s.get("max_barras") or MAX_BARRAS)   # vida máxima de esta señal (las antiguas: 48)
     traza = [e]   # recorrido del precio durante la operación (cierre de cada vela de 1 h) para el gráfico de la web
     velas = [_vela(ts, row) for ts, row in df[df.index < ent].tail(VELAS_PREVIAS).iterrows()]
     s["velas_entrada_idx"] = len(velas)   # las velas anteriores son contexto; a partir de aquí, la operación
 
     def fin(r, motivo, precio_fin, ts):
         traza.append(precio_fin)
-        s["traza"] = [num(v, 6) for v in traza[-(MAX_BARRAS + 2):]]
+        s["traza"] = [num(v, 6) for v in traza[-(mb + 2):]]
         s["velas"] = velas
         return cerrar_senal(s, r, motivo, precio_fin, ts, semana_id)
 
@@ -471,13 +528,13 @@ def seguir_senal(s, df, ahora_utc, semana_id):
         return fin(-1.0, "SL", sl, ahora_utc)
     if (larga and precio >= tp) or (not larga and precio <= tp):
         return fin(RR, "TP", tp, ahora_utc)
-    s["traza"] = [num(v, 6) for v in traza[-(MAX_BARRAS + 2):]]
+    s["traza"] = [num(v, 6) for v in traza[-(mb + 2):]]
     s["velas"] = velas
     r = ((precio - e) if larga else (e - precio)) / riesgo
     s["precio_actual"] = num(precio, 6)
     s["r_actual"] = round(r, 2)
     s["max_r"] = round(max(s.get("max_r") or 0.0, r), 2)
-    if len(posteriores) >= MAX_BARRAS:
+    if len(posteriores) >= mb:
         cerrar_senal(s, max(-1.0, min(RR, r)), "TIEMPO", precio, ahora_utc, semana_id)
 
 
@@ -614,7 +671,7 @@ def ejecutar_ciclo():
     estado_datos = "error" if n_ok == 0 else ("parcial" if n_ok < 0.8 * len(tickers) else "ok")
     print(f"📡 Datos de mercado: {n_ok}/{len(tickers)} activos ({estado_datos})")
 
-    backtest = actualizar_backtest(previos.get("backtest"), tickers, ahora_utc) if n_ok else (previos.get("backtest") or {"t": "", "e": {}})
+    backtest = actualizar_backtest(previos.get("backtest"), tickers, ahora_utc) if n_ok else (previos.get("backtest") or {"t": "", "e": {}, "cat": {}})
 
     # 1) Seguimiento y liquidación de las señales abiertas
     for s in senales:
@@ -655,7 +712,8 @@ def ejecutar_ciclo():
         mercado_abierto = (ahora_pd - ts_precio) <= pd.Timedelta(minutes=75)
         ref = df[df.index <= ahora_pd - pd.Timedelta(hours=24)]
         var_24h = (precio / float(ref["Close"].iloc[-1]) - 1) * 100 if len(ref) else None
-        stats = (backtest.get("e") or {}).get(tk) or {}
+        stats = (backtest.get("cat") or {}).get(info["cat"]) or {}      # ventaja agrupada de su categoría
+        stats_activo = (backtest.get("e") or {}).get(tk) or {}         # histórico propio, solo informativo
 
         if mercado_abierto and tk not in abiertas and not en_cooldown(tk) and len(ind) > 210:
             for k in (-1, -2):
@@ -690,7 +748,7 @@ def ejecutar_ciclo():
         else:
             nota = f"Tendencia {tend.lower()}: esperando retroceso y recuperación del RSI 50"
         _, _, disp = display_madrid(ts_precio.to_pydatetime())
-        bl, bs = stats.get("LONG") or {}, stats.get("SHORT") or {}
+        bl, bs = stats_activo.get("LONG") or {}, stats_activo.get("SHORT") or {}
         activos_web.append({
             "ticker": tk, "nombre": info["nombre"], "simbolo": info["simbolo"], "categoria": info["cat"],
             "cat_nombre": cat["name"], "cat_icono": cat["icono"], "precio": num(precio, 6),
@@ -699,6 +757,7 @@ def ejecutar_ciclo():
             "fecha_hora_display": disp, "nota": nota, "sin_datos": False,
             "bt_long": {"n": bl.get("n", 0), "p": bl.get("p"), "v": bl.get("v")},
             "bt_short": {"n": bs.get("n", 0), "p": bs.get("p"), "v": bs.get("v")},
+            "vida_max": vida_max(info["cat"]),
         })
 
     # 3) Resúmenes, libro mayor y guardado
