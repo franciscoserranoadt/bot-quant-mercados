@@ -82,7 +82,7 @@
             </span>
           </h1>
           <p class="text-[10px] font-extrabold tracking-[0.32em] text-brand-primary leading-tight -mt-0.5">MERCADOS</p>
-          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.5 · Bot --</p>
+          <p id="verTxt" class="text-[9px] font-mono text-slate-500 leading-tight">Web v1.6 · Bot --</p>
         </div>
       </div>
       <div class="flex items-center gap-2">
@@ -157,7 +157,7 @@
 
     <!-- TARJETAS DE RENDIMIENTO SEMANAL (COMPACTAS) -->
     <div class="p-3 rounded-2xl bg-brand-card border border-brand-border relative overflow-hidden shadow-md">
-      <div class="flex items-center justify-between gap-2">
+      <div onclick="toggleRendimiento('TG')" class="flex items-center justify-between gap-2 cursor-pointer select-none">
         <div class="flex items-center gap-2 min-w-0">
           <div class="w-7 h-7 rounded-lg bg-brand-primary/10 border-brand-primary/30 text-brand-primary border flex items-center justify-center flex-shrink-0">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M13 7h8m0 0v8m0-8l-8 8-4-4-6 6"></path></svg>
@@ -170,11 +170,15 @@
             <p class="text-[9px] text-slate-400 leading-tight">Curva de Equity &amp; Balance de Unidades</p>
           </div>
         </div>
-        <div class="text-right flex-shrink-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
+        <div class="text-right">
           <span class="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Balance Neto</span>
           <span id="balanceNetoTG" class="text-xs font-extrabold text-brand-primary font-mono">+0.00 U.</span>
         </div>
+          <span id="flechaTG" class="text-brand-primary text-[11px] leading-none transition-transform duration-200">▸</span>
+        </div>
       </div>
+      <div id="cuerpoTG" class="hidden">
       <div class="mt-1.5 px-2 py-1 rounded-lg bg-slate-900/60 border border-slate-800 text-[9px] text-slate-300 leading-snug">Métricas calculadas <strong>exclusivamente</strong> sobre las señales oficiales emitidas al <a href="https://t.me/apexquant_bot_mercados" target="_blank" class="text-brand-highlight underline">canal de Telegram</a>.</div>
       <div class="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-center">
         <div><span class="text-[8px] text-slate-400 uppercase font-bold block">Yield / ROI</span><span id="yieldRoiTG" class="text-[11px] font-bold text-brand-primary font-mono">+0.0%</span></div>
@@ -192,9 +196,10 @@
           </svg>
         </div>
       </div>
+      </div>
     </div>
     <div class="p-3 rounded-2xl bg-brand-card border border-brand-border relative overflow-hidden shadow-md">
-      <div class="flex items-center justify-between gap-2">
+      <div onclick="toggleRendimiento('Sin')" class="flex items-center justify-between gap-2 cursor-pointer select-none">
         <div class="flex items-center gap-2 min-w-0">
           <div class="w-7 h-7 rounded-lg bg-slate-800 border-slate-700 text-slate-300 border flex items-center justify-center flex-shrink-0">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M9 19v-6a2 2 0 00-2-2H5a2 2 0 00-2 2v6a2 2 0 002 2h2a2 2 0 002-2zm0 0V9a2 2 0 012-2h2a2 2 0 012 2v10m-6 0a2 2 0 002 2h2a2 2 0 002-2m0 0V5a2 2 0 012-2h2a2 2 0 012 2v14a2 2 0 01-2 2h-2a2 2 0 01-2-2z"></path></svg>
@@ -207,11 +212,15 @@
             <p class="text-[9px] text-slate-400 leading-tight">Curva de Equity &amp; Balance de Unidades</p>
           </div>
         </div>
-        <div class="text-right flex-shrink-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
+        <div class="text-right">
           <span class="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Balance Neto</span>
           <span id="balanceNetoSin" class="text-xs font-extrabold text-slate-300 font-mono">+0.00 U.</span>
         </div>
+          <span id="flechaSin" class="text-brand-primary text-[11px] leading-none transition-transform duration-200">▸</span>
+        </div>
       </div>
+      <div id="cuerpoSin" class="hidden">
       <div class="mt-1.5 px-2 py-1 rounded-lg bg-slate-900/60 border border-slate-800 text-[9px] text-slate-300 leading-snug">Control (descartadas): señales detectadas con precios reales que <strong>no se enviaron</strong> a Telegram (ventaja insuficiente o sin histórico que la respalde).</div>
       <div class="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-center">
         <div><span class="text-[8px] text-slate-400 uppercase font-bold block">Yield / ROI</span><span id="yieldRoiSin" class="text-[11px] font-bold text-slate-300 font-mono">+0.0%</span></div>
@@ -229,9 +238,10 @@
           </svg>
         </div>
       </div>
+      </div>
     </div>
     <div class="p-3 rounded-2xl bg-brand-card border border-brand-border relative overflow-hidden shadow-md">
-      <div class="flex items-center justify-between gap-2">
+      <div onclick="toggleRendimiento('Global')" class="flex items-center justify-between gap-2 cursor-pointer select-none">
         <div class="flex items-center gap-2 min-w-0">
           <div class="w-7 h-7 rounded-lg bg-sky-500/15 border-sky-500/30 text-sky-400 border flex items-center justify-center flex-shrink-0">
             <svg class="w-3.5 h-3.5" fill="none" stroke="currentColor" viewBox="0 0 24 24"><path stroke-linecap="round" stroke-linejoin="round" stroke-width="2" d="M3.055 11H5a2 2 0 012 2v1a2 2 0 002 2 2 2 0 012 2v2.945M8 3.935V5.5A2.5 2.5 0 0010.5 8h.5a2 2 0 012 2 2 2 0 104 0 2 2 0 012-2h1.064M15 20.488V18a2 2 0 012-2h3.064M21 12a9 9 0 11-18 0 9 9 0 0118 0z"></path></svg>
@@ -244,11 +254,15 @@
             <p class="text-[9px] text-slate-400 leading-tight">Curva de Equity &amp; Balance de Unidades</p>
           </div>
         </div>
-        <div class="text-right flex-shrink-0">
+        <div class="flex items-center gap-2 flex-shrink-0">
+        <div class="text-right">
           <span class="text-[8px] text-slate-400 font-bold uppercase tracking-wider block">Balance Neto</span>
           <span id="balanceNetoGlobal" class="text-xs font-extrabold text-sky-400 font-mono">+0.00 U.</span>
         </div>
+          <span id="flechaGlobal" class="text-brand-primary text-[11px] leading-none transition-transform duration-200">▸</span>
+        </div>
       </div>
+      <div id="cuerpoGlobal" class="hidden">
       <div class="mt-1.5 px-2 py-1 rounded-lg bg-slate-900/60 border border-slate-800 text-[9px] text-slate-300 leading-snug">Métricas consolidadas del <strong>universo total</strong> (suma unificada de Telegram + Control).</div>
       <div class="grid grid-cols-3 gap-1 mt-1.5 pt-1.5 border-t border-slate-800 text-center">
         <div><span class="text-[8px] text-slate-400 uppercase font-bold block">Yield / ROI</span><span id="yieldRoiGlobal" class="text-[11px] font-bold text-sky-400 font-mono">+0.0%</span></div>
@@ -265,6 +279,7 @@
             <path id="equityPathGlobal" d="M 0 25 L 100 25" fill="none" stroke="#38bdf8" stroke-width="2" stroke-linecap="round"/>
           </svg>
         </div>
+      </div>
       </div>
     </div>
 
@@ -797,7 +812,7 @@
     // =========================================================================
     // ESTADO DEL BOT (frescura de datos, fuente de precios, activos con datos)
     // =========================================================================
-    const VERSION_WEB = '1.5';
+    const VERSION_WEB = '1.6';
     function actualizarVersion() {
       const el = document.getElementById('verTxt');
       if (!el) return;
@@ -844,6 +859,15 @@
       else { badge.className = base + 'bg-slate-700/30 text-slate-300 border-slate-600/40'; bdot.className = 'w-1.5 h-1.5 rounded-full bg-slate-400'; btxt.innerText = 'ESPERANDO DATOS'; }
     }
 
+    // Tarjetas de rendimiento semanal plegables (como en la app de fútbol)
+    function toggleRendimiento(suf) {
+      const cuerpo = document.getElementById('cuerpo' + suf);
+      const flecha = document.getElementById('flecha' + suf);
+      if (!cuerpo) return;
+      cuerpo.classList.toggle('hidden');
+      if (flecha) flecha.classList.toggle('rotate-90');
+    }
+
     function toggleDetalle(id) {
       const el = document.getElementById(id);
       if (el) el.classList.toggle('hidden');
@@ -853,6 +877,29 @@
     // HISTÓRICO ACUMULADO (libro mayor historico_picks.json)
     // =========================================================================
     const MESES_ES = ['Ene','Feb','Mar','Abr','May','Jun','Jul','Ago','Sep','Oct','Nov','Dic'];
+    const MESES_CORTOS = ['ene','feb','mar','abr','may','jun','jul','ago','sep','oct','nov','dic'];
+    let HIST_PICKS = [];
+    const MESES_ABIERTOS = new Set();
+    let histPrimeraVez = true;
+
+    // "2026-W45" -> "2 nov-8 nov" (de lunes a domingo)
+    function rangoSemana(semId) {
+      const m = /^(\d{4})-W(\d{2})$/.exec(semId || '');
+      if (!m) return '';
+      const y = +m[1], w = +m[2];
+      const ene4 = new Date(Date.UTC(y, 0, 4));
+      const lunes = new Date(ene4);
+      lunes.setUTCDate(ene4.getUTCDate() - ((ene4.getUTCDay() + 6) % 7) + (w - 1) * 7);
+      const domingo = new Date(lunes);
+      domingo.setUTCDate(lunes.getUTCDate() + 6);
+      const f = d => `${d.getUTCDate()} ${MESES_CORTOS[d.getUTCMonth()]}`;
+      return `${f(lunes)}-${f(domingo)}`;
+    }
+
+    function toggleMes(m) {
+      if (MESES_ABIERTOS.has(m)) MESES_ABIERTOS.delete(m); else MESES_ABIERTOS.add(m);
+      renderizarHistorico(HIST_PICKS);
+    }
 
     function resumenPicks(picks) {
       let n = 0, w = 0, stake = 0, net = 0;
@@ -894,6 +941,7 @@
 
     function renderizarHistorico(picks) {
       const cont = document.getElementById('histContenido');
+      HIST_PICKS = picks;
       if (!picks.length) {
         cont.innerHTML = `<div class="p-6 text-center text-xs text-slate-400">Aún no hay señales cerradas. El histórico se irá llenando a medida que se alcancen los objetivos o los stops.</div>`;
         return;
@@ -909,16 +957,36 @@
       const ceroY = (36 - ((0 - min) / rango) * 32).toFixed(1);
 
       const meses = {};
-      picks.forEach(p => { const m = p.mes || 'S/D'; (meses[m] = meses[m] || { TG: [], CONTROL: [] })[p.grupo === 'TG' ? 'TG' : 'CONTROL'].push(p); });
-      const filas = Object.keys(meses).sort().reverse().map(m => {
+      picks.forEach(p => {
+        const m = p.mes || 'S/D', g = p.grupo === 'TG' ? 'TG' : 'CONTROL', sem = p.semana_id || 'S/D';
+        const mes = (meses[m] = meses[m] || { TG: [], CONTROL: [], semanas: {} });
+        mes[g].push(p);
+        (mes.semanas[sem] = mes.semanas[sem] || { TG: [], CONTROL: [] })[g].push(p);
+      });
+      const ordenMeses = Object.keys(meses).sort().reverse();
+      if (histPrimeraVez && ordenMeses.length) { MESES_ABIERTOS.add(ordenMeses[0]); histPrimeraVez = false; }   // el mes actual sale abierto
+      const celda = (r, cls) => `<td class="${cls} text-right ${colorNum(r.net)}">${r.n ? fmtU(r.net) : '--'}<span class="text-slate-500"> (${r.n})</span></td>`;
+      const filas = ordenMeses.map(m => {
         const a = resumenPicks(meses[m].TG), b = resumenPicks(meses[m].CONTROL);
         const [y, mm] = m.split('-');
         const nombre = mm ? `${MESES_ES[parseInt(mm, 10) - 1] || mm} ${y}` : m;
-        return `<tr class="border-t border-slate-800/80">
-          <td class="py-1.5 pr-2 text-slate-300 whitespace-nowrap">${nombre}</td>
-          <td class="py-1.5 text-right ${colorNum(a.net)}">${a.n ? fmtU(a.net) : '--'}<span class="text-slate-500"> (${a.n})</span></td>
-          <td class="py-1.5 text-right ${colorNum(b.net)}">${b.n ? fmtU(b.net) : '--'}<span class="text-slate-500"> (${b.n})</span></td>
-        </tr>`;
+        const semanas = Object.keys(meses[m].semanas).sort().reverse();
+        const abierto = MESES_ABIERTOS.has(m);
+        const filasSemanas = abierto ? semanas.map(sk => {
+          const sa = resumenPicks(meses[m].semanas[sk].TG), sb = resumenPicks(meses[m].semanas[sk].CONTROL);
+          const num = (/W(\d+)$/.exec(sk) || [])[1];
+          const etiqueta = num ? `S${parseInt(num, 10)} · ${rangoSemana(sk)}` : sk;
+          return `<tr class="text-[10px]">
+            <td class="py-1 pl-5 pr-2 text-slate-400 whitespace-nowrap">${etiqueta}</td>
+            ${celda(sa, 'py-1')}
+            ${celda(sb, 'py-1')}
+          </tr>`;
+        }).join('') : '';
+        return `<tr onclick="toggleMes('${m}')" class="border-t border-slate-800/80 cursor-pointer select-none">
+          <td class="py-1.5 pr-2 text-slate-300 whitespace-nowrap"><span class="inline-block w-3 text-brand-primary text-[9px]">${abierto ? '▾' : '▸'}</span>${nombre}<span class="text-slate-500 text-[9px]"> · ${semanas.length} sem.</span></td>
+          ${celda(a, 'py-1.5')}
+          ${celda(b, 'py-1.5')}
+        </tr>${filasSemanas}`;
       }).join('');
 
       const total = rTG.n + rCT.n;
@@ -944,7 +1012,7 @@
           </div>
         </div>
         <div class="p-3 rounded-2xl bg-brand-card border border-brand-border">
-          <span class="text-[10px] font-bold uppercase tracking-wide text-slate-400 block mb-1.5">Por mes (unidades y nº de señales)</span>
+          <span class="text-[10px] font-bold uppercase tracking-wide text-slate-400 block mb-1.5">Por mes · toca un mes para ver sus semanas</span>
           <table class="w-full text-[11px] font-mono">
             <thead><tr class="text-[9px] uppercase text-slate-500"><th class="text-left font-bold">Mes</th><th class="text-right font-bold">Telegram</th><th class="text-right font-bold">Control</th></tr></thead>
             <tbody>${filas}</tbody>
@@ -958,6 +1026,8 @@
       const modal = document.getElementById('modalHist');
       modal.classList.remove('hidden'); modal.classList.add('flex');
       document.getElementById('histContenido').innerHTML = `<div class="p-6 text-center text-xs text-slate-400">Cargando histórico...</div>`;
+      MESES_ABIERTOS.clear();
+      histPrimeraVez = true;
       try {
         const resp = await fetch('historico_picks.json?t=' + Date.now());
         if (!resp.ok) throw new Error('sin archivo');
